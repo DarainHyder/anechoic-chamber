@@ -1,0 +1,54 @@
+# Private material: never pushed (the repo is public)
+private/
+kaggle_outputs/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Audio and video belong in private/ or on Kaggle, not in git
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.ogg
+*.oga
+*.opus
+*.flac
+*.amr
+*.wma
+*.aif
+*.aiff
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.3gp
+
+# Model files go to the Hugging Face model repo
+models/**/*.onnx
+models/**/*.pt
+
+# Node
+node_modules/
+dist/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Tools and OS
+.claude/settings.local.json
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
