@@ -51,9 +51,14 @@ def is_ignored(root: Path, path: str) -> bool:
     return result.returncode == 0
 
 
-def find_problems(root: Path) -> list[str]:
+def find_problems_in_dirs(root: Path) -> list[str]:
     problems = [f"missing folder: {d}" for d in REQUIRED_DIRS if not (root / d).is_dir()]
     problems += [f"missing file: {f}" for f in REQUIRED_FILES if not (root / f).is_file()]
+    return problems
+
+
+def find_problems(root: Path) -> list[str]:
+    problems = find_problems_in_dirs(root)
     problems += [f"not ignored: {p}" for p in MUST_BE_IGNORED if not is_ignored(root, p)]
     problems += [f"wrongly ignored: {p}" for p in MUST_NOT_BE_IGNORED if is_ignored(root, p)]
     return problems
