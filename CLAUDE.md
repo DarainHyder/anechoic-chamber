@@ -1,0 +1,12 @@
+# Anechoic Chamber: rules for every session
+- Follow docs/BUILD_PROTOCOL.md. Read docs/PLAN.md and docs/PROGRESS.md first.
+- Work only on the current phase. Never start the next phase without my approval.
+- Heavy compute (GPU, training, >10 min CPU, >1 GB data, batch inference) goes to a Kaggle notebook I run. Never fake its results.
+- Audio never leaves the user's device. No code may upload audio.
+- The audio thread must never block; on any error, pass original audio through.
+- Every change ships with tests. Run them before saying a task is done.
+- Report metrics with numbers; never claim improvement without measuring.
+- Free tiers only. No paid services, nothing needing a card.
+- If unsure about an API or a limit, say "unverified" and check the docs.
+- The repo is public. Recordings, consent notes and tester details stay in `private/` and are never committed.
+- Commit one file at a time as each task passes (`phase-N: <task>: <file>`). Push those commits one by one at the end of the phase.
