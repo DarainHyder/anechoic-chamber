@@ -5,15 +5,15 @@ Updated at every stop point. Plan: `docs/PLAN.md`. Process: `docs/BUILD_PROTOCOL
 ## Current status
 
 - **Phase:** 0, Foundations
-- **Step:** 3, Build; tasks 1 to 8 done, first push next
-- **Next:** push file by file, confirm CI, then run the gate check
+- **Step:** 4, Gate check; 1 of 3 checks pass, the other 2 wait on the user
+- **Next:** user records clips and books testers; then rerun the gate, write the phase review and report
 - **Last updated:** 2026-11-06
 
 ## Phase overview
 
 | Phase | Name | Status | Gate |
 | --- | --- | --- | --- |
-| 0 | Foundations | Build | Not run |
+| 0 | Foundations | Gate check | 1 of 3 pass |
 | 1 | Data pipeline | Not started | Not run |
 | 2 | Baseline model | Not started | Not run |
 | 3 | Browser engine | Not started | Not run |
@@ -39,16 +39,16 @@ Updated at every stop point. Plan: `docs/PLAN.md`. Process: `docs/BUILD_PROTOCOL
 | 6 | Recording kit and clip-log checker | Done |
 | 7 | Tester kit and tester-log checker | Done |
 | 8 | Account guide and `.env.example` | Done |
-| 9 | First push, file by file, CI file last | Not started |
-| 10 | Gate check, review and report | Not started |
+| 9 | First push, file by file, CI file last | Done |
+| 10 | Gate check, review and report | Gate run; review waits for testers and clips |
 
 ### Gate table
 
 | Check | Target | Actual | Result |
 | --- | --- | --- | --- |
-| CI | Lint, type-check and unit tests green | Not run | Pending |
-| Testers | 5 to 10 booked, main triggers recorded | Not run | Pending |
-| Clips | 100 local trigger clips logged with consent notes | Not run | Pending |
+| CI | Lint, type-check and unit tests green | All 3 jobs green, run 42183323260 on `612cacd` | PASS |
+| Testers | 5 to 10 booked, main triggers recorded | 0 booked | FAIL (user task) |
+| Clips | 100 local trigger clips logged with consent notes | 0 valid clips | FAIL (user task) |
 
 ## Decisions
 
@@ -60,6 +60,7 @@ Updated at every stop point. Plan: `docs/PLAN.md`. Process: `docs/BUILD_PROTOCOL
 | 2026-11-06 | Added a git-ignored `private/` folder, pre-push hook and CI re-check | Repo is public; CI alone only reacts after a leak | User approved; PLAN.md edited |
 | 2026-11-06 | ESC-50 source changed to `karolpiczak/ESC-50` | Original repo, not `xufuou/ESC-50` | User approved; PLAN.md edited |
 | 2026-11-06 | GPU check skipped only when `SMOKE_TEST = True` | Plan and protocol conflicted on CPU smoke tests | User approved; PLAN.md and BUILD_PROTOCOL.md edited |
+| 2026-11-06 | No Claude attribution on commits or pull requests; strip it from existing history | User asked to remove Claude from collaboration on GitHub | User |
 
 ## Proposed plan changes (not applied; need approval)
 
