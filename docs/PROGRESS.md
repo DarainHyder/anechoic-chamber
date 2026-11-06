@@ -68,7 +68,7 @@ None.
 
 ## Open issues
 
-- Accounts are done: Vercel, Freesound, Kaggle (phone verified, as confirmed by the user), Hugging Face, Google AI Studio and Groq. Each key was tested against its provider on 2026-11-06. The keys were pasted into a chat, so they should be replaced before Phase 1.
+- Accounts are done: Vercel, Freesound, Kaggle (phone verified, as confirmed by the user), Hugging Face, Google AI Studio and Groq. Each key was tested against its provider on 2026-11-06.
 - `gh` is not installed, so CI results are read from GitHub's public API.
 - Local machine: Python 3.14 is the default and 3.11 is also installed; Node 24; `ffmpeg`, `pnpm` and `make` are not installed.
 - Check that the git commit email (`darainhyder2004@gmail.com`) is on the GitHub account, or commits will not link to the profile.
