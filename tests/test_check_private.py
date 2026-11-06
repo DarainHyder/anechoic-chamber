@@ -68,6 +68,12 @@ def test_env_example_with_a_value_is_reported() -> None:
     assert problems == [".env.example line 2: GEMINI_API_KEY has a value"]
 
 
+def test_repo_env_example_holds_no_keys() -> None:
+    text = (ROOT / ".env.example").read_text(encoding="utf-8")
+    assert "FREESOUND_API_KEY=" in text
+    assert check_private.env_example_problems(text) == []
+
+
 def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
