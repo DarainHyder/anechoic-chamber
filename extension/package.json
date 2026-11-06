@@ -1,0 +1,12 @@
+{
+  "name": "@anechoic-chamber/extension",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anechoic-chamber/engine": "*"
+  }
+}
