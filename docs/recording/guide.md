@@ -1,6 +1,8 @@
-# Recording guide: your first 100 clips
+# Recording guide (optional)
 
 These clips teach the model what real trigger sounds are like in local homes and hostels, such as chewing roti, crisps and pen clicks. Public datasets don't cover these sounds well.
+
+Recording is optional. The project runs on Creative Commons clips, and local sounds are a known gap in the data card. Use this guide if recording becomes possible.
 
 ## Before you start
 
@@ -26,7 +28,7 @@ If these sounds upset you too, record in short sessions and take breaks. There's
 | Clicks | `clicks` | 20 | Pen clicks, mouse clicks |
 | Typing | `typing` | 20 | Laptop keyboard, desktop keyboard, phone tapping |
 
-The mix is a suggestion. The gate only counts the 100 total, but the checker shows your count for each trigger so you can see any gaps.
+The mix is a suggestion. The checker shows your count for each trigger so you can see any gaps.
 
 ## How to record
 
