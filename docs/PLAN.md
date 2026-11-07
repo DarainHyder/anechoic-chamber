@@ -35,7 +35,7 @@ The primary user is a teenager or young adult with misophonia who studies, works
 Six principles every phase must respect:
 
 1. **Voices are sacred.** Removing a trigger must never make speech harder to understand; speech intelligibility is a release gate.
-2. **Artefacts are triggers too.** Gurgling or warbling left behind after removal can upset users as much as the original sound, so listening tests with real sufferers decide releases, not metrics alone.
+2. **Artefacts are triggers too.** Gurgling or warbling left behind after removal can upset users as much as the original sound, so a battery of independent automated perceptual checks with conservative thresholds decides releases, not a single removal metric. The project has no recruited human testers; real users give opt-in feedback only after launch.
 3. **On-device audio.** Audio never leaves the user's device. Only anonymous settings and opt-in usage counts reach the server.
 4. **User in control.** Every trigger has a slider (off, soften, remove, replace with soft noise) and a panic button that mutes everything.
 5. **Not a medical product.** Screening is labelled non-diagnostic; coping content is framed as support and points to professionals for severe distress.
@@ -115,14 +115,15 @@ Anechoic Chamber estimates the trigger sound and subtracts it, rather than rebui
 
 ## Datasets and the mixture pipeline
 
-Training data is built by mixing clean trigger clips into clean speech and music, so the exact trigger signal is always known. Public datasets supply most clips; your own recordings supply the local sounds (chewing roti, crisps, hostel pen clicks) that public sets miss.
+Training data is built by mixing clean trigger clips into clean speech and music, so the exact trigger signal is always known. Public datasets and targeted Freesound searches supply the clips. Local sounds that public sets cover poorly (chewing roti, hostel pen clicks) are a known gap, recorded in the data card; the recording kit in `docs/recording/` stays available if own recordings become possible.
 
 | Role | Source | What it gives | Licence notes |
 | --- | --- | --- | --- |
 | Triggers | [ESC-50](https://github.com/karolpiczak/ESC-50) | 2,000 five-second clips in 50 classes, including keyboard typing, mouse click, breathing, coughing, sneezing, snoring, clock tick and drinking or sipping | CC BY-NC (fine for a free product; revisit if you ever charge) |
 | Triggers and backgrounds | [FSD50K](https://zenodo.org/record/4060432) | 51,197 Freesound clips in 200 AudioSet classes | Dataset CC BY; each clip has its own CC licence, some non-commercial; check `vocabulary.csv` for chewing-related classes |
 | Extra triggers | Freesound API | Targeted search for chewing, crunching, sniffing, pen clicks, lip smacks | Keep only CC0 and CC BY clips; log each clip's licence and author |
-| Your recordings | Phone recordings with consent | 300+ clips of local triggers in real rooms, plus 50 "talking while eating" evaluation clips | Yours; get consent from everyone recorded |
+| Real-world test audio | Freesound, Wikimedia Commons, Internet Archive | 80 clips of real scenes: talking while eating, typing on calls, sniffing in lectures | CC0 and CC BY only; log licence and source; never used for training or tuning |
+| Own recordings (optional) | Phone recordings with consent, using `docs/recording/` | Local triggers in real rooms; none planned | Yours; get consent from everyone recorded |
 | Speech | LibriSpeech; Mozilla Common Voice (Urdu and English) | Clean read speech in two languages | Verify each licence before download |
 | Music and noise | MUSAN | Music, speech and noise beds | Verify licence |
 | Rooms | OpenSLR room impulse responses | Real and simulated room echo | Verify licence |
@@ -139,7 +140,7 @@ Training data is built by mixing clean trigger clips into clean speech and music
 
 - Split train, validation and test by original source recording, never by clip, so no recording leaks across splits (ESC-50's folds already do this).
 - Mix on the fly during training (dynamic mixing) to get effectively unlimited variety without storing terabytes.
-- Keep a frozen real-world test set: your 50 recorded clips plus 30 Creative Commons videos. It is never used for tuning.
+- Keep a frozen real-world test set: 80 Creative Commons clips of real scenes, collected in Phase 1 and never used for training or tuning. It has no exact ground truth, so it is scored with the reference-free judges in the Evaluation section.
 - Write a data card listing every source, count, licence and known gap.
 
 ## Real-time engine: extension and web app
@@ -198,12 +199,21 @@ A release must remove triggers, leave voices untouched and run in real time; the
 | Real-time factor | Processing time divided by audio duration, WASM on a mid-range laptop | 0.3 or less |
 | End-to-end latency | Tab audio delay, measured with a click track | 80 ms or less |
 | Model size | ONNX file after int8 quantisation | 10 MB or less |
-| Listener annoyance | 0 to 10 rating by misophonia testers, original against processed | 50% lower on average |
-| Artefact complaints | Share of test clips where testers report new unpleasant sounds | 10% or fewer |
+| Psychoacoustic annoyance | Zwicker–Fastl annoyance (loudness, sharpness, roughness, fluctuation strength) in trigger-active segments, original against processed | 50% lower on average |
+| Trigger audibility | Trigger-class probability from independent audio taggers never used in training | 70% lower on average |
+| Artefact rate | Share of test clips where the artefact checks flag new sounds absent from the input | 10% or fewer |
+| Speech quality (reference-free) | Change in a non-intrusive speech-quality score, such as DNSMOS or TorchAudio-Squim | Drop of 0.1 or less |
 
 **Baselines to beat, reported side by side:** the fixed band-stop filter approach used by the existing extension; the original Waveformer with one-hot classes; AudioSep offline as the quality ceiling.
 
-**Listening protocol.** Ten testers recruited from online misophonia communities rate 20 paired clips each, blind to which is processed, with a stop button available at all times. Results are reported with medians and ranges, not just averages.
+**Automated perceptual evaluation (no human testers).** No misophonia listeners are available, so releases are judged by a battery built to catch what a listener would hear:
+
+- **Independent judges.** Taggers and quality models used for judging (for example PANNs or BEATs taggers, DNSMOS or Squim) are never used for training or conditioning, so the model cannot learn to fool them. CLAP conditions the model, so it is never a judge.
+- **Agreement across judges.** A clip passes only if every judge passes it. Results are reported as medians and ranges across clips, not just averages.
+- **Psychoacoustics, not just energy.** Annoyance uses the Zwicker–Fastl model on trigger-active segments, because it tracks how loud, sharp and rough a sound feels.
+- **Artefact hunting.** Checks compare input and output for new tonal components, tagger classes that appear only in the output, and residual bursts just after trigger offsets, where gurgling and warbling show up.
+- **Spectrogram review.** Each evaluation round, Claude Code inspects before-and-after spectrograms of the 20 worst-scoring clips and records findings in PROGRESS.md.
+- **Honest claims.** Results are described as measured reductions, never as what people with misophonia report. Each judge's licence and validity are checked when the harness is built in Phase 2 (unverified until then).
 
 ## Phase-by-phase plan
 
@@ -218,23 +228,20 @@ Phases 3 and 4 ship a working extension on the baseline model, so the hardest en
 - [ ] Monorepo: `extension`, `web`, `packages/engine`, `api`, `ml` (training code), `synth`, `eval`, `kaggle`, `docs`
 - [ ] Accounts: GitHub, Vercel, Hugging Face, Google AI Studio, Groq, Kaggle (phone-verify now so GPU is enabled when needed), Freesound (API key needed in Phase 1)
 - [ ] CI: lint, type-check, unit tests
-- [ ] Privacy guard: recordings, consent notes and tester details stay in a git-ignored `private/` folder; a pre-push hook blocks them and CI re-checks, because the repo is public
-- [ ] Recruit 5 to 10 misophonia testers; record their main triggers
-- [ ] Record the first 100 local trigger clips with consent
-
-**Gate:** CI green; testers booked; clips logged with consent notes.
+- [ ] Privacy guard: recordings, consent notes and personal details stay in a git-ignored `private/` folder; a pre-push hook blocks them and CI re-checks, because the repo is public
+**Gate:** CI green; accounts created; the privacy guard blocks private files in a real push test.
 
 ### Phase 1: Data pipeline (weeks 2 to 3)
 
-- [ ] Download scripts for ESC-50, FSD50K subsets, Freesound (CC0 and CC BY only), speech, music, room responses, each logging licences
+- [ ] Download scripts for ESC-50, FSD50K subsets, Freesound (CC0 and CC BY only, for trigger clips and the 80-clip real-world test set), speech, music, room responses, each logging licences
 - [ ] Mixture generator with dynamic mixing and codec simulation; data card
 - [ ] **\[Kaggle K1\]** Build the trigger bank, compute CLAP embeddings for built-in triggers and the 300-phrase vocabulary, package everything as a private Kaggle dataset
 
-**Gate:** unit tests confirm mixture loudness maths; a leakage test proves no source recording spans two splits; you listen to 20 random mixtures and confirm they sound realistic.
+**Gate:** unit tests confirm mixture loudness maths; a leakage test proves no source recording spans two splits; automated realism checks pass on 200 random mixtures (no clipping; loudness and trigger-to-bed ratios within target ranges; an independent tagger hears speech and the trigger where expected); Claude Code reviews spectrograms of 20 random mixtures.
 
 ### Phase 2: Baseline model (weeks 4 to 5)
 
-- [ ] Evaluation harness computing every metric in the Evaluation section
+- [ ] Evaluation harness computing every metric in the Evaluation section, including the automated perceptual judges
 - [ ] Band-stop filter baseline
 - [ ] **\[Kaggle K2\]** Train Waveformer with fixed classes on the 4 MVP triggers at 16 kHz
 - [ ] Measure leftover trigger energy above 8 kHz; decide band-split versus 24 kHz and record the decision
@@ -266,12 +273,12 @@ Phases 3 and 4 ship a working extension on the baseline model, so the hardest en
 
 **Gate:** all synthetic targets met; on 2 trigger classes held out from training, SI-SDR improvement of 4 dB or more (proves new triggers work without retraining).
 
-### Phase 6: Listening test, round 1 (week 12)
+### Phase 6: Automated perceptual evaluation, round 1 (week 12)
 
-- [ ] Blind paired test with testers using the protocol in the Evaluation section
-- [ ] Analyse ratings and artefact complaints; write findings into PROGRESS.md
+- [ ] **\[Kaggle K7\]** Run the full perceptual battery from the Evaluation section on the synthetic test set and the frozen real-world test set
+- [ ] Review spectrograms of the 20 worst clips; write findings into PROGRESS.md
 
-**Gate:** annoyance 50% lower and artefact complaints 10% or fewer. If missed, the review sends specific fixes back into Phase 5 before moving on.
+**Gate:** psychoacoustic annoyance 50% lower, trigger audibility 70% lower, artefact rate 10% or fewer, and speech quality within target. If missed, the review sends specific fixes back into Phase 5 before moving on.
 
 ### Phase 7: Agent layer (weeks 13 to 14)
 
@@ -286,7 +293,7 @@ Phases 3 and 4 ship a working extension on the baseline model, so the hardest en
 - [ ] Onboarding, Urdu interface, optional Supabase sync, privacy page
 - [ ] Network audit proving no audio leaves the device
 
-**Gate:** Lighthouse accessibility score 95 or more; network audit clean; testers complete onboarding unaided.
+**Gate:** Lighthouse accessibility score 95 or more; network audit clean; an automated Playwright walkthrough completes onboarding using only the keyboard.
 
 ### Phase 9: Live mode v2 (weeks 16 to 17)
 
@@ -294,7 +301,7 @@ Phases 3 and 4 ship a working extension on the baseline model, so the hardest en
 - [ ] **\[Kaggle K6, optional\]** Train a tiny low-latency detector if the main model is too slow on phones
 - [ ] Wired-earbud experiment with true removal
 
-**Gate:** masking starts within 100 ms of trigger onset; tester feedback recorded.
+**Gate:** masking starts within 100 ms of trigger onset; false masking on 2% or fewer of trigger-free seconds.
 
 ### Phase 10: Launch (week 18 onward)
 
@@ -316,6 +323,7 @@ All training, distillation, embedding computation and large evaluations run on K
 | K4 | 5 | Train the embedding-conditioned student with detection head | GPU T4 or P100 | `student.pt`, `student.onnx`, metrics |
 | K5 | 5 | AudioSep pseudo-targets plus distillation fine-tune | GPU T4 or P100 | `student_kd.onnx`, before and after metrics |
 | K6 | 9 (optional) | Tiny low-latency detector for phones | GPU T4 | `detector.onnx`, latency report |
+| K7 | 6 | Automated perceptual evaluation battery on all test sets | GPU T4 | `perceptual_metrics.json`, worst-clip spectrograms, `REPORT.md` |
 
 **Every notebook follows the same contract.**
 
@@ -345,7 +353,7 @@ Five layers, each at a different cadence, so slow GPU work and randomness never 
 | Model contract tests | ONNX input and output shapes, silence in gives near-silence out, deterministic output for a fixed input | onnxruntime (Python and Node) | Every push |
 | Audio regression | 30 short reference clips processed by the current model; metrics compared with the stored baseline | `make eval-quick` | Every push touching `engine` or models |
 | Browser and extension | Real Chrome running the extension on a local test page with known audio; checks capture, output, bypass on failure, latency | Playwright with Chromium | Every push touching `extension` or `engine` |
-| Full evaluation and listening tests | Complete metrics on all test sets; blind tester sessions | Kaggle notebooks; tester protocol | End of model phases |
+| Full evaluation | Complete metrics and the perceptual battery on all test sets | Kaggle notebooks | End of model phases |
 
 **Merge rule:** a pull request fails if any evaluation metric drops more than 0.5 dB or 0.01 ESTOI against the stored baseline, or if latency rises above budget.
 
@@ -370,7 +378,7 @@ anechoic-chamber/
   eval/                     # metrics, reference clips, baselines, reports
   kaggle/notebooks/         # generated .ipynb files and RUN.md guides
   kaggle_outputs/           # you place unzipped Kaggle outputs here (git-ignored)
-  private/                  # recordings, consent notes, tester details (git-ignored, never pushed)
+  private/                  # recordings, consent notes, personal details (git-ignored, never pushed)
   models/                   # versioned ONNX files and manifests (pushed to HF model repo)
 ```
 
@@ -395,7 +403,9 @@ The biggest technical risk is leftover artefacts that upset users; the biggest p
 
 | Risk | Effect | Mitigation |
 | --- | --- | --- |
-| Removal artefacts | Users hear new unpleasant sounds | Subtract-the-trigger design; listening tests gate releases; soften and replace modes |
+| Removal artefacts | Users hear new unpleasant sounds | Subtract-the-trigger design; the perceptual battery gates releases; soften and replace modes |
+| Automated judges miss what sufferers hear | Artefacts or leftover triggers ship | Several independent judges, conservative thresholds, spectrogram review, soften and replace modes, opt-in feedback after launch |
+| Missing local sounds | Weaker removal of roti chewing or hostel clicks | Targeted Freesound searches; data card records the gap; recording kit ready if recordings become possible |
 | Speech damage | Voices become harder to understand | ESTOI gate; false-removal metric; the model is trained to output silence when unsure |
 | Latency too high | Audio drifts from video | 80 ms budget measured in CI; smaller model or larger hop as fallback |
 | Kaggle quota or session limits | Training stalls | Checkpoint and resume; CPU smoke tests first; runs under 8 hours |
@@ -407,7 +417,7 @@ The biggest technical risk is leftover artefacts that upset users; the biggest p
 
 **Launch plan.**
 
-- Closed beta with testers from online misophonia communities.
+- Open beta for users from online misophonia communities, with opt-in in-app ratings and no audio collected.
 - Open the GitHub repo with the evaluation report and a model card on Hugging Face.
 - A demo video: a food vlogger talking while eating crisps, toggle on, crunch gone, voice clear.
 - Publish the Chrome extension once the store fee is covered; share in misophonia communities and with university counselling services.
