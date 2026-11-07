@@ -8,5 +8,5 @@
 - Report metrics with numbers; never claim improvement without measuring.
 - Free tiers only. No paid services, nothing needing a card.
 - If unsure about an API or a limit, say "unverified" and check the docs.
-- The repo is public. Recordings, consent notes and tester details stay in `private/` and are never committed.
+- The repo is public. Recordings, consent notes and personal details stay in `private/` and are never committed.
 - Commit one file at a time as each task passes (`phase-N: <task>: <file>`). Push those commits one by one at the end of the phase.
