@@ -74,4 +74,4 @@ It lists any problems and counts your valid clips. `--gate` also requires 100 va
 
 ## Withdrawals
 
-If someone withdraws consent, delete their clips, remove their rows from the log and tell Claude Code, so the clips are left out of any future training data.
+If someone withdraws consent, delete their clips and remove their rows from the log, so the clips are left out of any future training data.
