@@ -2,6 +2,13 @@
 private/
 kaggle_outputs/
 
+# Local-only working files: assistant instructions, plan and log
+CLAUDE.md
+.claude/
+docs/PLAN.md
+docs/BUILD_PROTOCOL.md
+docs/PROGRESS.md
+
 # Secrets
 .env
 .env.*
@@ -47,7 +54,6 @@ __pycache__/
 .hypothesis/
 
 # Tools and OS
-.claude/settings.local.json
 .vscode/
 .DS_Store
 Thumbs.db
