@@ -1,0 +1,6 @@
+# Runtime libraries for the data pipeline (synth/, eval/).
+matplotlib==3.11.2
+numpy==2.4.6
+pyloudnorm==0.2.0
+scipy==1.17.1
+soundfile==0.14.0
