@@ -4,7 +4,7 @@
 
 Anechoic Chamber is a privacy-first AI filter for misophonia. It removes specific trigger sounds, such as chewing, sniffing, clicks and typing, from what you listen to, while keeping voices intact. All audio processing happens on your device.
 
-**Status: early development. Nothing is usable yet.** See [docs/PROGRESS.md](docs/PROGRESS.md) for the current phase and [docs/PLAN.md](docs/PLAN.md) for the full plan.
+**Status: early development. Nothing is usable yet.**
 
 ## Layout
 
@@ -20,7 +20,7 @@ Anechoic Chamber is a privacy-first AI filter for misophonia. It removes specifi
 | `kaggle/notebooks/` | Training notebooks and run guides |
 | `models/` | Model manifests (model files live on Hugging Face) |
 | `scripts/` | Repo checks and tools |
-| `docs/` | Plan, progress log and guides |
+| `docs/` | Guides |
 
 ## Development
 
