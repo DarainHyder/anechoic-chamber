@@ -22,13 +22,7 @@ REQUIRED_DIRS = (
     "scripts",
     "docs",
 )
-REQUIRED_FILES = (
-    "CLAUDE.md",
-    "README.md",
-    "docs/PLAN.md",
-    "docs/PROGRESS.md",
-    "docs/BUILD_PROTOCOL.md",
-)
+REQUIRED_FILES = ("README.md",)
 MUST_BE_IGNORED = (
     "private/recordings/clip.wav",
     "private/testers/tester_log.csv",
@@ -36,6 +30,11 @@ MUST_BE_IGNORED = (
     ".env",
     ".env.local",
     "stray_recording.m4a",
+    "CLAUDE.md",
+    ".claude/settings.json",
+    "docs/PLAN.md",
+    "docs/BUILD_PROTOCOL.md",
+    "docs/PROGRESS.md",
 )
 MUST_NOT_BE_IGNORED = (".env.example",)
 
