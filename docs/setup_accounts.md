@@ -1,6 +1,6 @@
 # Account setup
 
-Create these accounts now, so nothing blocks later phases. All of them should be free. **If any site asks for a card, stop and tell Claude Code instead of entering one.** Free-tier terms change, so the limits in `docs/PLAN.md` need rechecking when each service is first used.
+Create these accounts now, so nothing blocks later phases. All of them should be free. **If any site asks for a card, stop instead of entering one.** Free-tier terms change, so recheck the limits when each service is first used.
 
 | Service | Sign up | Needed from | Key to create now |
 | --- | --- | --- | --- |
@@ -20,7 +20,3 @@ Create these accounts now, so nothing blocks later phases. All of them should be
 `.env` is ignored by git, and the pre-push hook blocks it from being pushed. Keys for Kaggle notebooks go into Kaggle's own Secrets feature, never into the notebook.
 
 **Never paste a key into a chat, an issue or a code file.** If a key is exposed, delete it on the provider's site and create a new one.
-
-## When you're done
-
-Tell Claude Code which accounts are ready. You don't need to share the keys.
