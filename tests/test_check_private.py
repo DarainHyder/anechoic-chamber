@@ -28,6 +28,12 @@ HOOKS = ROOT / ".githooks"
         "stray.wav",
         "eval/VOICE_NOTE.OPUS",
         "video.mp4",
+        "CLAUDE.md",
+        "claude.md",
+        ".claude/settings.json",
+        "docs/PLAN.md",
+        "docs/BUILD_PROTOCOL.md",
+        "docs/PROGRESS.md",
     ],
 )
 def test_blocked_paths(path: str) -> None:
@@ -45,6 +51,8 @@ def test_blocked_paths(path: str) -> None:
         "scripts/check_private.py",
         "private.md",
         "wav_notes.txt",
+        "docs/setup_accounts.md",
+        "notes/CLAUDE.md.txt",
     ],
 )
 def test_allowed_paths(path: str) -> None:
@@ -131,6 +139,22 @@ def test_hook_blocks_a_file_added_then_deleted(clone: Path) -> None:
     git(clone, "rm", "private/consent.txt")
     git(clone, "commit", "-m", "remove it")
     assert git(clone, "push", "origin", "main", check=False).returncode != 0
+
+
+def test_hook_allows_removing_a_file_that_was_pushed_by_mistake(clone: Path) -> None:
+    commit(clone, "CLAUDE.md", "notes")
+    assert git(clone, "push", "--no-verify", "origin", "main", check=False).returncode == 0
+    git(clone, "rm", "--cached", "CLAUDE.md")
+    git(clone, "commit", "-m", "stop tracking it")
+    assert git(clone, "push", "origin", "main", check=False).returncode == 0
+    assert not remote_has(clone, "CLAUDE.md")
+
+
+def test_hook_blocks_a_local_only_file(clone: Path) -> None:
+    commit(clone, "docs/PLAN.md", "plan")
+    result = git(clone, "push", "origin", "main", check=False)
+    assert result.returncode != 0
+    assert "local-only working file" in result.stderr
 
 
 def test_hook_blocks_a_filled_in_env_example(clone: Path) -> None:
