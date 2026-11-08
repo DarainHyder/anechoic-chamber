@@ -19,6 +19,9 @@ from pathlib import PurePosixPath
 
 BLOCKED_DIRS = {"private", "kaggle_outputs"}
 BLOCKED_NAMES = {"clip_log.csv", "tester_log.csv"}
+# Local working files for the coding assistant: kept on the developer's machine only.
+LOCAL_ONLY_PATHS = {"claude.md", "docs/plan.md", "docs/build_protocol.md", "docs/progress.md"}
+LOCAL_ONLY_DIRS = {".claude"}
 MEDIA_SUFFIXES = {
     ".3gp",
     ".aac",
@@ -47,6 +50,10 @@ def block_reason(path: str) -> str | None:
     name = parts[-1].lower()
     if BLOCKED_DIRS.intersection(part.lower() for part in parts[:-1]):
         return "inside a private folder"
+    if PurePosixPath(path).as_posix().lower() in LOCAL_ONLY_PATHS or LOCAL_ONLY_DIRS.intersection(
+        part.lower() for part in parts[:-1]
+    ):
+        return "a local-only working file"
     if name in BLOCKED_NAMES:
         return "a real clip or tester log"
     if name == ".env" or (name.startswith(".env.") and name != ENV_EXAMPLE):
@@ -81,8 +88,13 @@ def split_paths(output: str) -> set[str]:
 
 
 def paths_in_commits(*revisions: str) -> set[str]:
-    """Return every path changed by the commits, including ones later deleted."""
-    return split_paths(git("log", "-m", "--name-only", "--format=", "-z", *revisions))
+    """Return every path added or changed by the commits, including ones later deleted.
+
+    Deletions are left out, so removing a file that should never have been pushed is allowed.
+    """
+    return split_paths(
+        git("log", "-m", "--name-only", "--diff-filter=d", "--format=", "-z", *revisions)
+    )
 
 
 def env_example_at(revision: str) -> str | None:
