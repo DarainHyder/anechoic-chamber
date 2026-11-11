@@ -209,16 +209,43 @@ def test_empty_pools_are_rejected() -> None:
 needs_ffmpeg = pytest.mark.skipif(audio.find_ffmpeg() is None, reason="ffmpeg not installed")
 
 
+def modulated_tone(seconds: float) -> np.ndarray:
+    t = np.arange(int(seconds * SAMPLE_RATE)) / SAMPLE_RATE
+    return (0.3 * np.sin(2 * np.pi * 220 * t) * (0.5 + 0.5 * np.sin(2 * np.pi * 3 * t))).astype(
+        np.float32
+    )
+
+
+def residual_lag(out: np.ndarray, reference: np.ndarray) -> int:
+    window = SAMPLE_RATE
+    correlation = np.correlate(out[:window], reference[:window], "full")
+    return int(np.argmax(correlation)) - (window - 1)
+
+
 @needs_ffmpeg
-@pytest.mark.parametrize(("codec", "kbps"), [("opus", 24), ("aac", 64)])
+@pytest.mark.parametrize(("codec", "kbps"), [("opus", 24), ("opus", 64), ("aac", 64)])
 def test_codec_roundtrip_keeps_length_and_alignment(codec: str, kbps: int) -> None:
-    signal = speechlike(4, 9)
     ffmpeg = audio.find_ffmpeg()
     assert ffmpeg is not None
+    tone = modulated_tone(4)
+    out = mix.codec_roundtrip(tone, codec, kbps, ffmpeg)
+    assert out.shape == tone.shape
+    assert residual_lag(out, tone) == 0
+    assert np.corrcoef(out, tone)[0, 1] > 0.98
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize(("codec", "kbps"), [("opus", 24), ("aac", 64)])
+def test_codec_on_noise_stays_aligned_and_near_level(codec: str, kbps: int) -> None:
+    """Perceptual codecs do not keep noise waveforms (Opus at 24 kbps measured about -3 dB),
+    so only the delay and the level are checked for noise-like sounds such as crunches."""
+    ffmpeg = audio.find_ffmpeg()
+    assert ffmpeg is not None
+    signal = speechlike(4, 9)
     out = mix.codec_roundtrip(signal, codec, kbps, ffmpeg)
     assert out.shape == signal.shape
-    correlation = np.corrcoef(out, signal)[0, 1]
-    assert correlation > 0.9
+    assert residual_lag(out, signal) == 0
+    assert abs(audio.rms_db(out) - audio.rms_db(signal)) < 4.0
     assert not np.array_equal(out, signal)
 
 
