@@ -119,6 +119,31 @@ def test_crop_pads_short_clips_and_cuts_long_ones() -> None:
     assert len(mix.crop(np.ones(500, dtype=np.float32), 100, rng)) == 100
 
 
+@settings(max_examples=100, deadline=None)
+@given(
+    position=st.integers(0, 30 * SAMPLE_RATE - 800),
+    length=st.integers(1600, 3 * SAMPLE_RATE),
+    seed=st.integers(0, 10_000),
+)
+def test_active_crop_always_contains_the_trigger(position: int, length: int, seed: int) -> None:
+    """A 30 s field recording: quiet room tone with one short loud burst."""
+    clip = noise(30, seed, 0.001)
+    clip[position : position + 800] += burst(seed, 0.05)[:800] * 0.5
+    out = mix.crop_active(clip, length, np.random.default_rng(seed))
+    assert len(out) == length
+    assert np.max(np.abs(out)) > 0.05
+
+
+def test_active_crop_returns_short_clips_whole() -> None:
+    short = burst(1, 0.5)
+    np.testing.assert_array_equal(mix.crop_active(short, 16000, np.random.default_rng(0)), short)
+
+
+def test_active_crop_of_silence_falls_back_to_a_plain_crop() -> None:
+    out = mix.crop_active(np.zeros(50_000, dtype=np.float32), 1000, np.random.default_rng(0))
+    assert len(out) == 1000
+
+
 def test_reverb_keeps_the_direct_path_aligned() -> None:
     impulse = np.zeros(1000, dtype=np.float32)
     impulse[100] = 1.0
