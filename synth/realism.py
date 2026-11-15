@@ -97,13 +97,20 @@ class MixtureCheck:
     trigger_score: float | None = None
     false_trigger: bool | None = None
     codec: str | None = None
+    clean_trigger_heard: bool | None = None
+    clean_trigger_score: float | None = None
+
+
+def window(signal: Audio, start_s: float, length_s: float) -> Audio:
+    """The EVENT_WINDOW_SECONDS window centred on an event, kept inside the signal."""
+    centre = int((start_s + length_s / 2) * SAMPLE_RATE)
+    half = int(EVENT_WINDOW_SECONDS * SAMPLE_RATE / 2)
+    lo = max(0, min(centre - half, len(signal) - 2 * half))
+    return signal[lo : lo + 2 * half]
 
 
 def event_window(m: Mixture, start_s: float, length_s: float) -> Audio:
-    centre = int((start_s + length_s / 2) * SAMPLE_RATE)
-    half = int(EVENT_WINDOW_SECONDS * SAMPLE_RATE / 2)
-    lo = max(0, min(centre - half, len(m.mixture) - 2 * half))
-    return m.mixture[lo : lo + 2 * half]
+    return window(m.mixture, start_s, length_s)
 
 
 def check(
@@ -141,9 +148,14 @@ def check(
         "speech_score": speech_score,
     }
     if strongest is not None:
-        window = tagger(event_window(m, strongest.start_s, strongest.length_s))
-        values["trigger_score"] = group_score(window, labels, strongest.trigger)
-        values["trigger_heard"] = detection.hears(window, labels, strongest.trigger)
+        mixed = tagger(window(m.mixture, strongest.start_s, strongest.length_s))
+        values["trigger_score"] = group_score(mixed, labels, strongest.trigger)
+        values["trigger_heard"] = detection.hears(mixed, labels, strongest.trigger)
+        # The same window of the trigger alone: if the judge cannot hear it even here,
+        # the problem is the clip or the judge, not masking by the bed.
+        clean = tagger(window(m.trigger, strongest.start_s, strongest.length_s))
+        values["clean_trigger_score"] = group_score(clean, labels, strongest.trigger)
+        values["clean_trigger_heard"] = detection.hears(clean, labels, strongest.trigger)
     else:
         values["false_trigger"] = any(detection.hears(whole, labels, g) for g in TRIGGER_GROUPS)
     return MixtureCheck(**{**asdict(result), **values})
@@ -179,10 +191,20 @@ def summarise(checks: Sequence[MixtureCheck]) -> dict[str, Any]:
         "false_trigger_rate": _rate(bool(c.false_trigger) for c in quiet),
         "false_trigger_count": len(quiet),
     }
+    clean = [c for c in loud if c.clean_trigger_heard is not None]
+    metrics["clean_trigger_detect_rate"] = _rate(bool(c.clean_trigger_heard) for c in clean)
     by_trigger: dict[str, list[bool]] = {}
+    by_trigger_clean: dict[str, list[bool]] = {}
     for c in loud:
         by_trigger.setdefault(str(c.strongest_trigger), []).append(bool(c.trigger_heard))
+    for c in clean:
+        by_trigger_clean.setdefault(str(c.strongest_trigger), []).append(
+            bool(c.clean_trigger_heard)
+        )
     metrics["trigger_detect_rate_by_trigger"] = {k: _rate(v) for k, v in sorted(by_trigger.items())}
+    metrics["clean_trigger_detect_rate_by_trigger"] = {
+        k: _rate(v) for k, v in sorted(by_trigger_clean.items())
+    }
     metrics["gate"] = gate_results(metrics)
     return metrics
 
