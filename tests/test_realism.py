@@ -150,3 +150,19 @@ def test_spectrogram_image_is_written(tmp_path: Path) -> None:
     realism.render_spectrogram(m, path, "test")
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     assert path.stat().st_size > 10_000
+
+
+def test_clean_trigger_is_judged_in_the_same_window() -> None:
+    sampler = MixtureSampler(pools(), NO_CODEC, seed=6)
+    tagger = FakeTagger(loud_rms=0.0)
+    checks = [
+        realism.check(sampler.sample(i), NO_CODEC, tagger, Detection(0.1, 1)) for i in range(30)
+    ]
+    with_events = [c for c in checks if c.events]
+    assert with_events
+    assert all(c.clean_trigger_heard is not None for c in with_events)
+    assert all(c.clean_trigger_heard is None for c in checks if not c.events)
+    summary = realism.summarise(checks)
+    assert "clean_trigger_detect_rate" in summary
+    assert "clean_trigger_detect_rate_by_trigger" in summary
+    assert "clean_trigger_detect_rate" not in summary["gate"]  # information, not a gate
