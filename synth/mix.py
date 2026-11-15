@@ -181,6 +181,27 @@ def crop(signal: Audio, length: int, rng: np.random.Generator) -> Audio:
     return out
 
 
+def crop_active(
+    signal: Audio, length: int, rng: np.random.Generator, relative_db: float = 20.0
+) -> Audio:
+    """Random window that always contains a frame within relative_db of the clip's peak.
+
+    Field recordings are mostly background between the sounds people uploaded them
+    for, so a blind random cut often misses the trigger entirely.
+    """
+    if len(signal) <= length:
+        return signal.astype(np.float32, copy=True)
+    powers = audio.frame_powers(signal)
+    if not powers.size or powers.max() <= 0:
+        return crop(signal, length, rng)
+    loud = np.flatnonzero(powers >= powers.max() * 10 ** (-relative_db / 10))
+    frame = int(loud[int(rng.integers(0, loud.size))])
+    centre = frame * FRAME + FRAME // 2
+    start = centre - int(rng.integers(0, length))
+    start = max(0, min(start, len(signal) - length))
+    return signal[start : start + length].astype(np.float32)
+
+
 def reverb(signal: Audio, rir: Audio, tail: int = 0) -> Audio:
     """Convolve with a room response aligned to its direct path; keep len + tail samples."""
     if not rir.size or not np.any(rir):
@@ -314,7 +335,7 @@ class MixtureSampler:
             clip = self._pick(pools.triggers[name], rng)
             source = clip.load()
             seconds = self._uniform(cfg.event_seconds, rng)
-            segment = crop(source, min(len(source), int(seconds * SAMPLE_RATE)), rng)
+            segment = crop_active(source, min(len(source), int(seconds * SAMPLE_RATE)), rng)
             if rir is not None:
                 segment = reverb(segment, rir, tail)
             start = int(rng.integers(0, max(1, n - len(segment))))
