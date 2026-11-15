@@ -13,7 +13,7 @@ import pytest
 import soundfile as sf
 
 from eval import realworld
-from synth import audio, k1
+from synth import audio, k1, vocab
 from synth.audio import SAMPLE_RATE
 from synth.freesound import FreesoundClient, Response
 from tests.test_mix import burst, speechlike
@@ -123,13 +123,28 @@ class AllTriggersTagger(FakeTagger):
         return probs
 
 
+PHRASE_GROUP = {phrase: group for group, phrase in vocab.load()}
+
+
 def fake_embed_audio(signals: Sequence[np.ndarray]) -> np.ndarray:
-    return np.stack([np.random.default_rng(len(s)).standard_normal(16) for s in signals])
+    """Every clip sounds equally like all four triggers and like no negative prompt."""
+    vector = np.zeros(16)
+    vector[:4] = 1.0
+    return np.stack([vector for _ in signals])
 
 
 def fake_embed_text(texts: Sequence[str]) -> np.ndarray:
-    seeds = [int(hashlib.sha256(t.encode()).hexdigest()[:8], 16) for t in texts]
-    return np.stack([np.random.default_rng(s).standard_normal(16) for s in seeds])
+    """Trigger phrases point along their group's axis; anything else along axes 4 to 15."""
+    rows = []
+    for text in texts:
+        vector = np.zeros(16)
+        group = PHRASE_GROUP.get(text)
+        if group in k1.TRIGGERS:
+            vector[k1.TRIGGERS.index(group)] = 1.0
+        else:
+            vector[4 + int(hashlib.sha256(text.encode()).hexdigest()[:4], 16) % 12] = 1.0
+        rows.append(vector)
+    return np.stack(rows)
 
 
 def make(tmp_path: Path, server: FakeFreesound, logs: list[str]) -> tuple[k1.K1Config, k1.Deps]:
@@ -271,3 +286,55 @@ def test_full_config_is_bigger_than_smoke() -> None:
     assert full.mixtures == 200 and full.realworld_size == 80
     assert full.mix_splits == ("train",)
     assert set(k1.SMOKE_DATASETS) <= set(full.datasets)
+
+
+def test_outputs_from_an_earlier_run_are_cleared(tmp_path: Path) -> None:
+    cfg, deps = make(tmp_path, FakeFreesound(), [])
+    stray = cfg.out_dir / "spectrograms" / "999.png"
+    stray.parent.mkdir(parents=True)
+    stray.write_bytes(b"old")
+    k1.run(cfg, deps)
+    assert not stray.exists()
+    assert len(list((cfg.out_dir / "spectrograms").glob("*.png"))) == cfg.spectrograms
+
+
+def test_state_from_another_configuration_is_refused(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    cfg, _ = make(tmp_path, FakeFreesound(), [])
+    cfg.state_dir.mkdir(parents=True)
+    k1.check_state(cfg)
+    k1.check_state(cfg)  # the same configuration again is fine
+    with pytest.raises(RuntimeError, match="different configuration"):
+        k1.check_state(replace(cfg, smoke=False, realworld_size=80))
+
+
+def test_curation_keeps_trigger_like_clips_and_drops_others() -> None:
+    names = ["chewing_eating", "sniffing_breathing", "clicks", "typing", "negative:silence"]
+    classes = np.eye(5)
+    own = np.array([[0.1, 0.0, 0.0, 0.0, 0.2], [0.9, 0.1, 0.0, 0.0, 0.2]])
+    assert k1.judge_clip(own, names, classes, "chewing_eating") == (True, 1)
+    silence = np.array([[0.2, 0.0, 0.0, 0.0, 0.9]])
+    assert k1.judge_clip(silence, names, classes, "chewing_eating") == (False, -1)
+    clicks_vs_typing = np.array([[0.0, 0.0, 0.7, 0.8, 0.1]])  # second place is allowed
+    assert k1.judge_clip(clicks_vs_typing, names, classes, "clicks")[0]
+    third_place = np.array([[0.9, 0.0, 0.2, 0.8, 0.1]])
+    assert not k1.judge_clip(third_place, names, classes, "clicks")[0]
+
+
+def test_clip_windows_cover_short_and_long_clips() -> None:
+    assert len(k1.clip_windows(np.zeros(SAMPLE_RATE, dtype=np.float32))) == 1
+    windows = k1.clip_windows(np.zeros(60 * SAMPLE_RATE, dtype=np.float32))
+    assert len(windows) == k1.CURATION_WINDOWS
+    assert all(len(w) == 4 * SAMPLE_RATE for w in windows)
+
+
+def test_metrics_report_curation_and_clean_upper_bound(
+    first_run: tuple[Path, dict[str, Any], list[str]],
+) -> None:
+    root, metrics, _ = first_run
+    assert metrics["curation"]["method"] == "CLAP zero-shot"
+    assert metrics["bank"]["collected"] >= metrics["bank"]["clips"] > 0
+    assert metrics["mixtures"]["clean_trigger_detect_rate"] is not None
+    report = (root / "outputs" / "K1_data_bank" / "REPORT.md").read_text()
+    assert "Clean trigger alone" in report and "Bank curation" in report
