@@ -307,6 +307,90 @@ def build_bank(
     return manifest.load()
 
 
+# ---- bank curation with CLAP (never with the judge) ---------------------------------
+
+NEGATIVE_PROMPTS = (
+    "people talking",
+    "music",
+    "silence",
+    "background noise",
+    "traffic noise",
+    "birds singing",
+    "wind noise",
+    "electrical hum",
+)
+CURATION_WINDOWS = 8
+
+
+def clip_windows(signal: Audio, seconds: float = 4.0, hop: float = 2.0) -> list[Audio]:
+    size, step = int(seconds * SAMPLE_RATE), int(hop * SAMPLE_RATE)
+    if len(signal) < size:
+        signal = np.pad(signal, (0, size - len(signal)))
+    starts = range(0, len(signal) - size + 1, step)
+    return [signal[s : s + size] for s in starts][:CURATION_WINDOWS]
+
+
+def curation_classes(deps: Deps) -> tuple[list[str], NDArray[np.float64]]:
+    """One CLAP text vector per trigger (mean of its phrases) and per negative prompt."""
+    rows = vocab.load()
+    names: list[str] = []
+    vectors = []
+    for group in TRIGGERS:
+        phrases = [phrase for g, phrase in rows if g == group]
+        vectors.append(_normalise_rows(deps.embed_text(phrases).mean(axis=0)))
+        names.append(group)
+    for prompt in NEGATIVE_PROMPTS:
+        vectors.append(_normalise_rows(deps.embed_text([prompt])[0]))
+        names.append(f"negative:{prompt}")
+    return names, np.stack(vectors)
+
+
+def judge_clip(
+    window_vectors: NDArray[np.floating],
+    names: Sequence[str],
+    classes: NDArray[np.floating],
+    group: str,
+) -> tuple[bool, int]:
+    """Keep a clip if, in some window, its own trigger beats every negative prompt and
+    ranks first or second among the triggers (clicks and typing overlap acoustically)."""
+    sims = _normalise_rows(window_vectors) @ np.asarray(classes).T
+    own = names.index(group)
+    trigger_idx = [i for i, n in enumerate(names) if not n.startswith("negative:")]
+    negative_idx = [i for i, n in enumerate(names) if n.startswith("negative:")]
+    for w, row in enumerate(sims):
+        beats_negatives = row[own] > row[negative_idx].max()
+        rank = sum(row[i] > row[own] for i in trigger_idx)
+        if beats_negatives and rank <= 1:
+            return True, w
+    return False, -1
+
+
+def curate_bank(
+    cfg: K1Config, deps: Deps, bank: Sequence[freesound.ClipRecord]
+) -> tuple[list[freesound.ClipRecord], dict[str, Any]]:
+    cache_path = cfg.state_dir / "curation.json"
+    cache: dict[str, Any] = json.loads(cache_path.read_text()) if cache_path.is_file() else {}
+    names, classes = curation_classes(deps)
+    todo = [r for r in bank if str(r.freesound_id) not in cache]
+    progress = Progress("curation", len(todo), deps.log, every=50)
+    for count, record in enumerate(todo, start=1):
+        signal = audio.load(cfg.bank_dir / record.file)[: 30 * SAMPLE_RATE]
+        vectors = deps.embed_audio(clip_windows(signal))
+        keep, best = judge_clip(vectors, names, classes, record.group)
+        cache[str(record.freesound_id)] = {"group": record.group, "keep": keep, "window": best}
+        progress.step()
+        if count % 50 == 0:
+            cache_path.write_text(json.dumps(cache))
+    cache_path.write_text(json.dumps(cache))
+    kept = [r for r in bank if cache[str(r.freesound_id)]["keep"]]
+    stats: dict[str, Any] = {"method": "CLAP zero-shot", "negatives": list(NEGATIVE_PROMPTS)}
+    for group in TRIGGERS:
+        total = sum(1 for r in bank if r.group == group)
+        stats[group] = {"total": total, "kept": sum(1 for r in kept if r.group == group)}
+    deps.log(f"curation: {stats}")
+    return kept, stats
+
+
 # ---- splits, pools, embeddings, mixtures ----------------------------------------
 
 
@@ -507,15 +591,45 @@ def report(metrics: Mapping[str, Any]) -> str:
         f"- CLAP audio-to-text agreement: {metrics['embeddings']['accuracy']} "
         f"(nearest text group per trigger: {metrics['embeddings']['nearest_text_group']}).",
         f"- Trigger detection by trigger: {metrics['mixtures']['trigger_detect_rate_by_trigger']}.",
+        f"- Clean trigger alone, same windows (upper bound): "
+        f"{metrics['mixtures'].get('clean_trigger_detect_rate')}, by trigger "
+        f"{metrics['mixtures'].get('clean_trigger_detect_rate_by_trigger')}.",
+        f"- Bank curation (CLAP): {metrics.get('curation')}.",
         "",
         "Listen to `samples/` and look at `spectrograms/` before accepting these numbers.",
     ]
     return "\n".join(lines) + "\n"
 
 
+STATE_KEYS = (
+    "smoke", "seed", "per_trigger", "per_query", "fsd50k_per_group", "realworld_per_query",
+    "realworld_queries_per_scene", "realworld_size", "realworld_seconds",
+)  # fmt: skip
+
+
+def check_state(cfg: K1Config) -> None:
+    """Refuse to reuse state written by a different configuration (such as a smoke test)."""
+    fingerprint = {key: getattr(cfg, key) for key in STATE_KEYS}
+    fingerprint = json.loads(json.dumps(fingerprint))  # tuples become lists, as stored
+    path = cfg.state_dir / "config.json"
+    if path.is_file():
+        stored = json.loads(path.read_text())
+        if stored != fingerprint:
+            raise RuntimeError(
+                f"{cfg.state_dir} was written by a different configuration "
+                f"(stored {stored}, now {fingerprint}); use a separate state folder"
+            )
+    else:
+        path.write_text(json.dumps(fingerprint))
+
+
 def run(cfg: K1Config, deps: Deps, clap_model: str = "laion/clap-htsat-fused") -> dict[str, Any]:
-    for folder in (cfg.data_dir, cfg.bank_dir, cfg.realworld_dir, cfg.out_dir, cfg.state_dir):
+    for folder in (cfg.data_dir, cfg.bank_dir, cfg.realworld_dir, cfg.state_dir):
         folder.mkdir(parents=True, exist_ok=True)
+    check_state(cfg)
+    # Outputs are rebuilt from state on every run, so nothing from an earlier run can mix in.
+    shutil.rmtree(cfg.out_dir, ignore_errors=True)
+    cfg.out_dir.mkdir(parents=True)
     started = time.monotonic()
     log = deps.log
 
@@ -530,7 +644,8 @@ def run(cfg: K1Config, deps: Deps, clap_model: str = "laion/clap-htsat-fused") -
         shutil.copy(
             cfg.state_dir / "realworld_test_set.json", cfg.out_dir / "realworld_test_set.json"
         )
-    bank = build_bank(cfg, deps, realworld.uploaders(test_set))
+    collected = build_bank(cfg, deps, realworld.uploaders(test_set))
+    bank, curation = curate_bank(cfg, deps, collected)
     (cfg.out_dir / "freesound_bank.jsonl").write_text(
         "".join(json.dumps(asdict(r)) + "\n" for r in bank), encoding="utf-8"
     )
@@ -564,7 +679,8 @@ def run(cfg: K1Config, deps: Deps, clap_model: str = "laion/clap-htsat-fused") -
         "repo_commit": cfg.repo_commit,
         "downloads": downloads,
         "realworld": {"size": len(test_set), "target": cfg.realworld_size},
-        "bank": {"clips": len(bank), "per_group": per_group},
+        "bank": {"clips": len(bank), "collected": len(collected), "per_group": per_group},
+        "curation": curation,
         "pools": {
             "speech": len(inv.speech),
             "music": len(inv.music),
